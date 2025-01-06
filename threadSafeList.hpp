@@ -131,6 +131,11 @@ void ThreadSafe_list<T>::remove_if(Predicate p) {
             curr->next=std::move(next->next);
             next_lk.unlock();
             old_next.reset();
+
+            {
+                std::lock_guard<std::mutex>guard(this->size_mtx);
+                this->size--;
+            }
         } else {
             lk.unlock();
             curr=next;
