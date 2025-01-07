@@ -32,6 +32,7 @@ class ThreadSafe_list {
 
     void push_front(const T& value);
     void push_back(const T& value);
+    void insert(const size_t& index,const T& value);
 
     template <typename Function>
     void for_each(Function f);
@@ -141,5 +142,41 @@ void ThreadSafe_list<T>::remove_if(Predicate p) {
             curr=next;
             lk=std::move(next_lk);
         }
+    }
+}
+
+template <typename T>
+void ThreadSafe_list<T>::insert(const size_t& index,const T& value) {
+    if (index == 0) {
+        push_front(value);
+        return;
+    }
+
+    {
+        std::lock_guard<std::mutex> size_guard(size_mtx);
+        if (index>size-1) throw std::out_of_range("Index out of range");
+    }
+
+
+    Node* curr=&head;
+    std::unique_lock<std::mutex>lk(head.mtx);
+
+    for (int i=0;i<index;++i) {
+        Node* const next=curr->next.get();
+        std::unique_lock<std::mutex>next_lk(next->mtx);
+
+        lk.unlock();
+        curr=next;
+        lk=std::move(next_lk);
+    }
+
+    auto new_node=std::make_unique<Node>(value);
+    auto old_next=std::move(curr->next);
+    new_node->next=std::move(old_next);
+    curr->next=std::move(new_node);
+
+    {
+        std::lock_guard<std::mutex>guard(size_mtx);
+        this->size++;
     }
 }
